@@ -1,30 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-# ------------------------------------------------------------
-# Exercise 2
-# Solve:
-#     dy/dt = (t/2) * (2 - y)
-#     y(0) = 1,  0 <= t <= 4
-#
-# Method: Euler predictor followed by one trapezoidal correction
-#         (Heun's method).
-# ------------------------------------------------------------
-
-
-def f(t, y):
-    """Return the derivative dy/dt."""
-    return (t / 2) * (2 - y)
-
-
 def exact_solution(t):
-    """Return the analytical solution satisfying y(0) = 1."""
+    """Return the analytical solution."""
     return 2 - np.exp(-(t**2) / 4)
 
 
 def trapezoidal_method(h):
-    """Solve the ODE using Heun's predictor-corrector method."""
+    """Solve the ODE using the implicit trapezoidal method."""
 
     # Define the interval and initial condition.
     t_initial = 0.0
@@ -34,31 +17,32 @@ def trapezoidal_method(h):
     # Calculate the number of steps.
     n = int(round((t_final - t_initial) / h))
 
-    # Create the time grid and an array for the numerical solution.
+    # Create the time grid, including both endpoints.
     t = np.linspace(t_initial, t_final, n + 1)
-    y = np.zeros(n + 1)
 
-    # Set the initial condition.
+    # Create the numerical solution array.
+    y = np.zeros(n + 1)
     y[0] = y_initial
 
-    # Advance the solution one step at a time.
     for i in range(n):
 
-        # Step 1: calculate the slope at the current point.
-        slope_initial = f(t[i], y[i])
+        # The implicit trapezoidal formula is:
+        #
+        # y[i+1] = y[i] + (h/2) * (
+        #     (t[i]/2) * (2 - y[i])
+        #     + (t[i+1]/2) * (2 - y[i+1])
+        # )
+        #
+        # For this linear ODE, solve algebraically for y[i+1].
 
-        # Step 2: use Euler's method to predict the next value.
-        # y_predictor = y_i + h * f(t_i, y_i)
-        y_predictor = y[i] + h * slope_initial
-
-        # Step 3: calculate the slope at the predicted endpoint.
-        slope_final = f(t[i + 1], y_predictor)
-
-        # Step 4: correct the prediction using the average slope.
-        # y_(i+1) = y_i + (h/2) * (slope_initial + slope_final)
-        y[i + 1] = y[i] + (h / 2) * (
-            slope_initial + slope_final
+        numerator = (
+            (1 - h * t[i] / 4) * y[i]
+            + (h / 2) * (t[i] + t[i + 1])
         )
+
+        denominator = 1 + h * t[i + 1] / 4
+
+        y[i + 1] = numerator / denominator
 
     return t, y
 
@@ -66,24 +50,25 @@ def trapezoidal_method(h):
 # Step sizes required in the exercise.
 step_sizes = [0.1, 0.01, 0.001]
 
-# Create two plots:
-# 1. Numerical solutions and analytical solution.
-# 2. Absolute errors, to make the differences easier to see.
-fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+colors = ["tab:red", "tab:blue", "tab:green"]
+line_styles = ["--", "-.", ":"]
 
-# Use a fine grid to draw the analytical solution smoothly.
+# Create two plots side by side.
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Draw the analytical solution using a fine grid.
 t_exact = np.linspace(0, 4, 1001)
 
 axes[0].plot(
     t_exact,
     exact_solution(t_exact),
     color="black",
-    linewidth=2,
+    linewidth=1.5,
     label="Analytical solution"
 )
 
-# Print a summary of the numerical results.
-print("Exercise 2: Trapezoidal predictor-corrector method")
+# Print the numerical results.
+print("Exercise 2: Implicit trapezoidal method")
 print(f"Exact value at t = 4: {exact_solution(4):.12f}")
 print()
 
@@ -97,22 +82,22 @@ print(
 
 print("-" * 74)
 
-for h in step_sizes:
+for h, color, style in zip(
+    step_sizes, colors, line_styles
+):
 
-    # Solve the ODE for this step size.
+    # Calculate the numerical solution.
     t, y = trapezoidal_method(h)
 
     # Evaluate the analytical solution at the same grid points.
     y_exact = exact_solution(t)
 
-    # Calculate the absolute error at every grid point.
+    # Calculate the absolute global error at every grid point.
     absolute_error = np.abs(y_exact - y)
 
-    # Calculate the endpoint and maximum errors.
     endpoint_error = absolute_error[-1]
     maximum_error = np.max(absolute_error)
 
-    # Display the results.
     print(
         f"{h:8.3f} "
         f"{len(t) - 1:8d} "
@@ -121,33 +106,43 @@ for h in step_sizes:
         f"{maximum_error:18.6e}"
     )
 
-    # Plot the numerical solution.
+    # First plot: numerical and analytical solutions.
     axes[0].plot(
         t,
         y,
-        linestyle="--",
-        label=f"Heun, h = {h}"
+        color=color,
+        linestyle=style,
+        linewidth=1.8,
+        label=f"Trapezoidal, h = {h}"
     )
 
-    # Plot the absolute error on a logarithmic vertical scale.
-    # Omit t = 0 because its error is zero.
+    # Second plot: absolute errors.
+    # Mask zero errors because the logarithm of zero is undefined.
+    error_to_plot = np.ma.masked_less_equal(
+        absolute_error, 0
+    )
+
     axes[1].semilogy(
-        t[1:],
-        absolute_error[1:],
+        t,
+        error_to_plot,
+        color=color,
+        linewidth=1.5,
         label=f"h = {h}"
     )
 
-# Format the solution plot.
+# Format the first plot.
 axes[0].set_title("Numerical and analytical solutions")
 axes[0].set_xlabel("t")
 axes[0].set_ylabel("y(t)")
+axes[0].set_xlim(0, 4)
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# Format the error plot.
+# Format the second plot.
 axes[1].set_title("Absolute error at the grid points")
 axes[1].set_xlabel("t")
 axes[1].set_ylabel("|y_exact - y_numerical|")
+axes[1].set_xlim(0, 4)
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
